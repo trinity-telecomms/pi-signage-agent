@@ -1,4 +1,5 @@
 import mqtt, { type MqttClient } from 'mqtt';
+import fs from 'node:fs';
 
 import { createSessionPassword } from './mqtt-credentials';
 import { logger } from './logger';
@@ -93,6 +94,19 @@ async function connectMqtt(config: AgentConfig, runtime: DeviceRuntimeInfo, secr
   const password = createSessionPassword(secrets.key, Math.floor(Date.now() / 1000));
   const brokerUrl = toBrokerUrl(config);
 
+  const tlsOptions: Record<string, unknown> = {};
+  if (config.mqttProtocol === 'mqtts' || config.mqttProtocol === 'wss') {
+    tlsOptions.rejectUnauthorized = config.mqttRejectUnauthorized;
+
+    if (config.mqttCaCertPath) {
+      tlsOptions.ca = fs.readFileSync(config.mqttCaCertPath);
+    }
+
+    if (config.mqttServername) {
+      tlsOptions.servername = config.mqttServername;
+    }
+  }
+
   const client = mqtt.connect(brokerUrl, {
     username,
     password,
@@ -100,6 +114,7 @@ async function connectMqtt(config: AgentConfig, runtime: DeviceRuntimeInfo, secr
     clean: true,
     connectTimeout: 10_000,
     clientId: `signage-${runtime.uid}-${Math.random().toString(16).slice(2, 10)}`,
+    ...tlsOptions,
   });
 
   await new Promise<void>((resolve, reject) => {

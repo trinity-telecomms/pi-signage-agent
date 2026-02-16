@@ -17,9 +17,14 @@ export interface AgentConfig {
   mediaDir: string;
   vlcBin: string;
   vlcExtraArgs: string[];
+  startupAutoplay: boolean;
+  startupMediaPath: string;
   downloadTimeoutMs: number;
   mqttReconnectDelayMs: number;
   agentHeartbeatIntervalMs: number;
+  mqttRejectUnauthorized: boolean;
+  mqttCaCertPath: string | null;
+  mqttServername: string | null;
 }
 
 export interface DeviceRuntimeInfo {

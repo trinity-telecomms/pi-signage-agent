@@ -38,6 +38,11 @@ Optional overrides:
 - `MEDIA_DIR` (default `/opt/signage/media`)
 - `VLC_BIN` (default `/usr/bin/cvlc`)
 - `VLC_EXTRA_ARGS`
+- `STARTUP_AUTOPLAY` (default `true`)
+- `STARTUP_MEDIA_PATH` (default `/opt/signage/media/current.mp4`)
+- `MQTT_REJECT_UNAUTHORIZED` (default `true`)
+- `MQTT_CA_CERT_PATH` (optional)
+- `MQTT_SERVERNAME` (optional)
 
 ## Development
 
@@ -111,3 +116,15 @@ Expected deployment layout:
   - `0.signage_agent.username`
   - `0.signage_agent.ipv4`
   - `0.signage_agent.hostname`
+
+## MQTT TLS troubleshooting
+
+If logs show `Client network socket disconnected before secure TLS connection was established`:
+
+- Verify protocol/port pair in `.env`:
+  - TLS broker: `MQTT_PROTOCOL=mqtts`, `MQTT_PORT=8883` (or provider-specific TLS port)
+  - Plain broker: `MQTT_PROTOCOL=mqtt`, `MQTT_PORT=1883` (or provider-specific plain port)
+- If broker uses private CA, set:
+  - `MQTT_CA_CERT_PATH=/path/to/ca.crt`
+- If required by broker certificate/SNI, set:
+  - `MQTT_SERVERNAME=<broker-cert-hostname>`

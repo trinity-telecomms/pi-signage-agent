@@ -49,7 +49,23 @@ function parseVlcExtraArgs(raw: string | undefined): string[] {
   return value.split(/\s+/).filter(Boolean);
 }
 
+function parseBoolean(raw: string | undefined, fallback: boolean): boolean {
+  const value = raw?.trim().toLowerCase();
+  if (!value) {
+    return fallback;
+  }
+  if (value === '1' || value === 'true' || value === 'yes' || value === 'on') {
+    return true;
+  }
+  if (value === '0' || value === 'false' || value === 'no' || value === 'off') {
+    return false;
+  }
+  throw new Error(`Invalid boolean value: "${raw}"`);
+}
+
 export function loadConfig(): AgentConfig {
+  const mediaDir = path.resolve(env('MEDIA_DIR', '/opt/signage/media'));
+
   const config: AgentConfig = {
     connectApiBaseUrl: env('CONNECT_API_BASE_URL', 'https://capi.trintel.co.za/api/v4'),
     connectApiKey: requireEnv('CONNECT_API_KEY'),
@@ -66,15 +82,22 @@ export function loadConfig(): AgentConfig {
     deviceNamePrefix: env('DEVICE_NAME_PREFIX', 'pi-signage'),
     deviceDescriptionPrefix: env('DEVICE_DESCRIPTION_PREFIX', 'Raspberry Pi signage agent'),
     agentStateFile: path.resolve(env('AGENT_STATE_FILE', './data/agent-state.json')),
-    mediaDir: path.resolve(env('MEDIA_DIR', '/opt/signage/media')),
+    mediaDir,
     vlcBin: env('VLC_BIN', '/usr/bin/cvlc'),
     vlcExtraArgs: parseVlcExtraArgs(process.env.VLC_EXTRA_ARGS),
+    startupAutoplay: parseBoolean(process.env.STARTUP_AUTOPLAY, true),
+    startupMediaPath: path.resolve(env('STARTUP_MEDIA_PATH', path.join(mediaDir, 'current.mp4'))),
     downloadTimeoutMs: asPositiveInt(env('DOWNLOAD_TIMEOUT_MS', '120000'), 'DOWNLOAD_TIMEOUT_MS'),
     mqttReconnectDelayMs: asPositiveInt(env('MQTT_RECONNECT_DELAY_MS', '5000'), 'MQTT_RECONNECT_DELAY_MS'),
     agentHeartbeatIntervalMs: asPositiveInt(
       env('AGENT_HEARTBEAT_INTERVAL_MS', '60000'),
       'AGENT_HEARTBEAT_INTERVAL_MS',
     ),
+    mqttRejectUnauthorized: parseBoolean(process.env.MQTT_REJECT_UNAUTHORIZED, true),
+    mqttCaCertPath: process.env.MQTT_CA_CERT_PATH?.trim()
+      ? path.resolve(process.env.MQTT_CA_CERT_PATH.trim())
+      : null,
+    mqttServername: process.env.MQTT_SERVERNAME?.trim() || null,
   };
 
   if (!/^\d+$/.test(config.connectCompanyId)) {

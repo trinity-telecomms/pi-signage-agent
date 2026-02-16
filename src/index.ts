@@ -1,9 +1,12 @@
+import fs from 'node:fs/promises';
+
 import { acknowledgeZteEnrollment, createConnectDevice, enrollDeviceWithZte, getApiErrorDetails, isEnrollmentAlreadyCompleteError } from './connect-client';
 import { loadConfig } from './config';
 import { buildDeviceRuntimeInfo } from './device-info';
 import { logger } from './logger';
 import { runMqttLoop } from './mqtt-agent';
 import { createSessionPassword } from './mqtt-credentials';
+import { playMedia } from './signage';
 import { loadAgentState, saveAgentState } from './state-store';
 import type { AgentState } from './types';
 
@@ -58,6 +61,51 @@ async function resolveMqttSecrets(
   return { cid: enrollment.cid, key: enrollment.key };
 }
 
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function maybeStartStartupPlayback(config: ReturnType<typeof loadConfig>): Promise<void> {
+  if (!config.startupAutoplay) {
+    logger.info('Startup autoplay disabled');
+    return;
+  }
+
+  const candidates = [
+    config.startupMediaPath,
+    `${config.mediaDir}/current.mp4`,
+    `${config.mediaDir}/current.webm`,
+    `${config.mediaDir}/current.mov`,
+    `${config.mediaDir}/current.mkv`,
+    `${config.mediaDir}/current.jpeg`,
+    `${config.mediaDir}/current.jpg`,
+    `${config.mediaDir}/current.png`,
+  ];
+
+  let selectedPath: string | null = null;
+  for (const candidate of candidates) {
+    if (await fileExists(candidate)) {
+      selectedPath = candidate;
+      break;
+    }
+  }
+
+  if (!selectedPath) {
+    logger.warn('Startup autoplay skipped: no startup media file found', {
+      checked: candidates,
+    });
+    return;
+  }
+
+  await playMedia(selectedPath, config);
+  logger.info('Startup playback started', { mediaPath: selectedPath });
+}
+
 async function main(): Promise<void> {
   const config = loadConfig();
   const runtime = buildDeviceRuntimeInfo(config);
@@ -68,6 +116,8 @@ async function main(): Promise<void> {
     username: runtime.username,
     ipv4: runtime.ipv4,
   });
+
+  await maybeStartStartupPlayback(config);
 
   await createConnectDevice(config, runtime);
   logger.info('Device ensured on Connect', { uid: runtime.uid, folderId: config.connectFolderId });
