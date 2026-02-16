@@ -1,3 +1,4 @@
+import fs from 'node:fs/promises';
 import path from 'node:path';
 
 import { downloadMedia, playMedia, stopMedia } from './signage';
@@ -40,15 +41,99 @@ function parsePlayArgs(args: unknown[], config: AgentConfig): { mediaPath: strin
   return { mediaPath: requestedPath || path.join(config.mediaDir, 'current.mp4') };
 }
 
+type MediaMode = 'image' | 'video';
+
+function parseStartMode(args: unknown[]): MediaMode | null {
+  const objectArg = asObjectArg(args[0]);
+  if (objectArg && typeof objectArg.mode === 'string') {
+    const mode = objectArg.mode.trim().toLowerCase();
+    if (mode === 'image' || mode === 'video') {
+      return mode;
+    }
+  }
+
+  const first = typeof args[0] === 'string' ? args[0].trim().toLowerCase() : '';
+  if (first === 'image' || first === 'video') {
+    return first;
+  }
+
+  const second = typeof args[1] === 'string' ? args[1].trim().toLowerCase() : '';
+  if (second === 'image' || second === 'video') {
+    return second;
+  }
+
+  return null;
+}
+
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function resolveDefaultMediaPath(mode: MediaMode, config: AgentConfig): Promise<string | null> {
+  const candidates =
+    mode === 'video'
+      ? [
+          path.join(config.mediaDir, 'current.mp4'),
+          path.join(config.mediaDir, 'current.webm'),
+          path.join(config.mediaDir, 'current.mov'),
+          path.join(config.mediaDir, 'current.mkv'),
+        ]
+      : [
+          path.join(config.mediaDir, 'current.jpeg'),
+          path.join(config.mediaDir, 'current.jpg'),
+          path.join(config.mediaDir, 'current.png'),
+          path.join(config.mediaDir, 'current.webp'),
+        ];
+
+  for (const candidate of candidates) {
+    if (await fileExists(candidate)) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
 export async function handleInboundCommand(command: ParsedInboundCommand, config: AgentConfig): Promise<CommandOutcome> {
   try {
     switch (command.rpc) {
       case 'ping':
         return { resultCode: 0, detail: 'pong' };
 
+      case 'stop':
       case 'signage_stop':
         await stopMedia();
         return { resultCode: 0, detail: 'playback stopped' };
+
+      case 'start': {
+        const mode = parseStartMode(command.args);
+        if (!mode) {
+          return {
+            resultCode: -100,
+            detail: 'start requires media mode as image or video (args[0] or args[1])',
+          };
+        }
+
+        const mediaPath = await resolveDefaultMediaPath(mode, config);
+        if (!mediaPath) {
+          return {
+            resultCode: -100,
+            detail: `start ${mode} failed: no current ${mode} file found in ${config.mediaDir}`,
+          };
+        }
+
+        await playMedia(mediaPath, config);
+        return {
+          resultCode: 0,
+          detail: `${mode} playback started`,
+          data: { mediaPath, mode },
+        };
+      }
 
       case 'signage_download': {
         const { url, filename } = parseDownloadArgs(command.args);

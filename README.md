@@ -69,6 +69,8 @@ The agent parses Connect command envelopes from subscribed topic `CID/UID/+/</#`
 
 Supported RPC names:
 - `ping`
+- `start` (requires media mode: `image` or `video`)
+- `stop`
 - `signage_download`
 - `signage_play`
 - `signage_download_and_play`
@@ -87,6 +89,18 @@ Argument examples:
 
 ```json
 {"c":[0,["signage_set_media",{"url":"https://example.com/screen.jpg","filename":"screen.jpg"}]]}
+```
+
+```json
+{"c":[0,["stop"]]}
+```
+
+```json
+{"c":[0,["start","video"]]}
+```
+
+```json
+{"c":[0,["start","image"]]}
 ```
 
 ## systemd deployment
