@@ -71,6 +71,10 @@ export function loadConfig(): AgentConfig {
     vlcExtraArgs: parseVlcExtraArgs(process.env.VLC_EXTRA_ARGS),
     downloadTimeoutMs: asPositiveInt(env('DOWNLOAD_TIMEOUT_MS', '120000'), 'DOWNLOAD_TIMEOUT_MS'),
     mqttReconnectDelayMs: asPositiveInt(env('MQTT_RECONNECT_DELAY_MS', '5000'), 'MQTT_RECONNECT_DELAY_MS'),
+    agentHeartbeatIntervalMs: asPositiveInt(
+      env('AGENT_HEARTBEAT_INTERVAL_MS', '60000'),
+      'AGENT_HEARTBEAT_INTERVAL_MS',
+    ),
   };
 
   if (!/^\d+$/.test(config.connectCompanyId)) {

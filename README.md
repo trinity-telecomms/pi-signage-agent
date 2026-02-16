@@ -7,7 +7,7 @@ Features:
 - Auto-registers device in Connect (`/devices/device/`)
 - Performs ZTE enrollment (`/devices/zte/...`) and persists credentials in local JSON state
 - Connects to MQTT broker using Connect/ZTE credential model
-- Publishes initial telemetry payload with `username` and `ipv4`
+- Publishes initial and heartbeat telemetry payloads with `username` and `ipv4`
 - Subscribes for commands and can download/play media via VLC kiosk mode
 - No SQLite dependency
 
@@ -34,6 +34,7 @@ Copy `.env.example` to `.env` and set values:
 Optional overrides:
 - `DEVICE_UID` (15-20 numeric chars)
 - `AGENT_STATE_FILE` (default `./data/agent-state.json`)
+- `AGENT_HEARTBEAT_INTERVAL_MS` (default `60000`)
 - `MEDIA_DIR` (default `/opt/signage/media`)
 - `VLC_BIN` (default `/usr/bin/cvlc`)
 - `VLC_EXTRA_ARGS`
@@ -106,3 +107,7 @@ Expected deployment layout:
 
 - If ZTE says enrollment is complete but no state file exists, seed `AGENT_STATE_FILE` with `cid` and `key` or re-provision enrollment.
 - Run under a service account with permissions for target folder/device creation and ZTE enrollment.
+- Latest data paths for status payload are:
+  - `0.signage_agent.username`
+  - `0.signage_agent.ipv4`
+  - `0.signage_agent.hostname`

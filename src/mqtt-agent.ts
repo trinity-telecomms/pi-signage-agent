@@ -74,6 +74,20 @@ function toDataMessage(payload: Record<string, unknown>): string {
   return JSON.stringify({ d: [Math.floor(Date.now() / 1000), [payload]] });
 }
 
+function toAgentStatusPayload(config: AgentConfig, runtime: DeviceRuntimeInfo): Record<string, unknown> {
+  return {
+    signage_agent: {
+      status: 'online',
+      username: runtime.username,
+      ipv4: runtime.ipv4,
+      hostname: runtime.hostname,
+      connect_company_id: config.connectCompanyId,
+      connect_folder_id: config.connectFolderId,
+      ts: Math.floor(Date.now() / 1000),
+    },
+  };
+}
+
 async function connectMqtt(config: AgentConfig, runtime: DeviceRuntimeInfo, secrets: RuntimeSecrets): Promise<MqttClient> {
   const username = `${secrets.cid}${runtime.uid}`;
   const password = createSessionPassword(secrets.key, Math.floor(Date.now() / 1000));
@@ -148,26 +162,24 @@ async function runConnectedSession(
   secrets: RuntimeSecrets,
 ): Promise<void> {
   const pid = config.mqttPid;
-
   const publishTopic = `${secrets.cid}/${runtime.uid}/${pid}/>`;
-  const initialPayload = toDataMessage({
-    signage_agent: {
-      status: 'online',
-      username: runtime.username,
-      ipv4: runtime.ipv4,
-      hostname: runtime.hostname,
-      connect_company_id: config.connectCompanyId,
-      connect_folder_id: config.connectFolderId,
-      ts: Math.floor(Date.now() / 1000),
-    },
-  });
+  const publishStatus = async (): Promise<void> => {
+    const payload = toDataMessage(toAgentStatusPayload(config, runtime));
+    await publish(client, publishTopic, payload);
+    logger.info('Agent status payload published', { topic: publishTopic });
+  };
 
-  await publish(client, publishTopic, initialPayload);
-  logger.info('Initial payload published', { topic: publishTopic });
+  await publishStatus();
 
   const commandTopic = toCommandSubscribeTopic(runtime, secrets);
   await subscribe(client, commandTopic);
   logger.info('Subscribed to command topic', { topic: commandTopic });
+
+  const heartbeatTimer = setInterval(() => {
+    void publishStatus().catch((error) => {
+      logger.warn('Agent heartbeat publish failed', error instanceof Error ? error.message : error);
+    });
+  }, config.agentHeartbeatIntervalMs);
 
   client.on('message', (topic, payloadBuffer) => {
     const command = parseInboundCommand(topic, payloadBuffer);
@@ -205,6 +217,8 @@ async function runConnectedSession(
     client.once('end', () => resolve());
     client.once('error', () => resolve());
   });
+
+  clearInterval(heartbeatTimer);
 }
 
 export async function runMqttLoop(config: AgentConfig, runtime: DeviceRuntimeInfo, secrets: RuntimeSecrets): Promise<never> {

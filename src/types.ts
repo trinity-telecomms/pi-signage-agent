@@ -19,6 +19,7 @@ export interface AgentConfig {
   vlcExtraArgs: string[];
   downloadTimeoutMs: number;
   mqttReconnectDelayMs: number;
+  agentHeartbeatIntervalMs: number;
 }
 
 export interface DeviceRuntimeInfo {
