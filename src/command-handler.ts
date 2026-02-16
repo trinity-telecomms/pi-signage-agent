@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { spawn } from 'node:child_process';
 
 import { downloadMedia, playMedia, stopMedia } from './signage';
 import type { AgentConfig, ParsedInboundCommand } from './types';
@@ -162,6 +163,34 @@ async function cleanupLegacyModeFiles(mode: MediaMode, config: AgentConfig): Pro
   }
 }
 
+function shellEscape(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+function triggerBackgroundUpdate(config: AgentConfig): void {
+  const sourceDir = shellEscape(config.agentSourceDir);
+  const logFile = shellEscape(config.updateLogFile);
+
+  const script = [
+    'set -euo pipefail',
+    `mkdir -p $(dirname ${logFile})`,
+    `echo \"[$(date -Iseconds)] update started\" >> ${logFile}`,
+    `cd ${sourceDir}`,
+    'git pull --ff-only',
+    'bun install',
+    'bun run build',
+    'sudo -n ./scripts/install.sh',
+    `echo \"[$(date -Iseconds)] update completed\" >> ${logFile}`,
+  ].join('; ');
+
+  const child = spawn('bash', ['-lc', script], {
+    detached: true,
+    stdio: 'ignore',
+    env: process.env,
+  });
+  child.unref();
+}
+
 export async function handleInboundCommand(command: ParsedInboundCommand, config: AgentConfig): Promise<CommandOutcome> {
   try {
     switch (command.rpc) {
@@ -220,6 +249,25 @@ export async function handleInboundCommand(command: ParsedInboundCommand, config
           resultCode: 0,
           detail: `${mode} downloaded and playback started`,
           data: { mediaPath: slotPath, mode },
+        };
+      }
+
+      case 'update': {
+        if (!config.enableUpdateCommand) {
+          return {
+            resultCode: -100,
+            detail: 'update command is disabled (ENABLE_UPDATE_COMMAND=false)',
+          };
+        }
+
+        triggerBackgroundUpdate(config);
+        return {
+          resultCode: 0,
+          detail: 'update started',
+          data: {
+            sourceDir: config.agentSourceDir,
+            logFile: config.updateLogFile,
+          },
         };
       }
 

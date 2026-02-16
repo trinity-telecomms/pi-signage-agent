@@ -25,6 +25,9 @@ export interface AgentConfig {
   mqttRejectUnauthorized: boolean;
   mqttCaCertPath: string | null;
   mqttServername: string | null;
+  agentSourceDir: string;
+  enableUpdateCommand: boolean;
+  updateLogFile: string;
 }
 
 export interface DeviceRuntimeInfo {

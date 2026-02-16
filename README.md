@@ -72,6 +72,7 @@ Supported RPC names:
 - `start` (requires media mode: `image` or `video`)
 - `stop`
 - `download` (requires media mode and public URL; downloads, overwrites slot file, and starts playback)
+- `update` (pull latest code, build, install, restart service)
 - `signage_download`
 - `signage_play`
 - `signage_download_and_play`
@@ -118,6 +119,26 @@ Also accepted (nested tuple arg style):
 {"c":[0,["download",["video","https://google.com/test.mp4"]]]}
 ```
 
+```json
+{"c":[0,["update"]]}
+```
+
+`update` runs this flow in background:
+- `git pull --ff-only` in `AGENT_SOURCE_DIR`
+- `bun install`
+- `bun run build`
+- `sudo -n ./scripts/install.sh`
+
+Update logs are written to `AGENT_UPDATE_LOG_FILE`.
+
+To allow non-interactive install from the running agent user, configure sudoers for `install.sh`.
+Example (adjust username/path):
+
+```bash
+echo 'admin ALL=(root) NOPASSWD: /home/admin/src/pi-signage-agent/scripts/install.sh' | sudo tee /etc/sudoers.d/pi-signage-agent
+sudo chmod 440 /etc/sudoers.d/pi-signage-agent
+```
+
 ## systemd deployment
 
 Template unit file:
@@ -156,4 +177,4 @@ If logs show `Client network socket disconnected before secure TLS connection wa
 - If broker uses private CA, set:
   - `MQTT_CA_CERT_PATH=/path/to/ca.crt`
 - If required by broker certificate/SNI, set:
-  - `MQTT_SERVERNAME=<broker-cert-hostname>`
+- `MQTT_SERVERNAME=<broker-cert-hostname>`

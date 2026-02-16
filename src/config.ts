@@ -1,4 +1,5 @@
 import path from 'node:path';
+import os from 'node:os';
 
 import type { AgentConfig } from './types';
 
@@ -65,6 +66,7 @@ function parseBoolean(raw: string | undefined, fallback: boolean): boolean {
 
 export function loadConfig(): AgentConfig {
   const mediaDir = path.resolve(env('MEDIA_DIR', '/opt/signage/media'));
+  const defaultSourceDir = `/home/${os.userInfo().username}/src/pi-signage-agent`;
 
   const config: AgentConfig = {
     connectApiBaseUrl: env('CONNECT_API_BASE_URL', 'https://capi.trintel.co.za/api/v4'),
@@ -98,6 +100,9 @@ export function loadConfig(): AgentConfig {
       ? path.resolve(process.env.MQTT_CA_CERT_PATH.trim())
       : null,
     mqttServername: process.env.MQTT_SERVERNAME?.trim() || null,
+    agentSourceDir: path.resolve(env('AGENT_SOURCE_DIR', defaultSourceDir)),
+    enableUpdateCommand: parseBoolean(process.env.ENABLE_UPDATE_COMMAND, true),
+    updateLogFile: path.resolve(env('AGENT_UPDATE_LOG_FILE', '/tmp/pi-signage-agent-update.log')),
   };
 
   if (!/^\d+$/.test(config.connectCompanyId)) {
