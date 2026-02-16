@@ -43,7 +43,25 @@ function parsePlayArgs(args: unknown[], config: AgentConfig): { mediaPath: strin
 
 type MediaMode = 'image' | 'video';
 
+const SLOT_FILENAME: Record<MediaMode, string> = {
+  video: 'current-video',
+  image: 'current-image',
+};
+
+const LEGACY_MODE_FILES: Record<MediaMode, string[]> = {
+  video: ['current.mp4', 'current.webm', 'current.mov', 'current.mkv'],
+  image: ['current.jpeg', 'current.jpg', 'current.png', 'current.webp'],
+};
+
 function parseStartMode(args: unknown[]): MediaMode | null {
+  const tupleArg = Array.isArray(args[0]) ? args[0] : null;
+  if (tupleArg && tupleArg.length > 0 && typeof tupleArg[0] === 'string') {
+    const mode = tupleArg[0].trim().toLowerCase();
+    if (mode === 'image' || mode === 'video') {
+      return mode;
+    }
+  }
+
   const objectArg = asObjectArg(args[0]);
   if (objectArg && typeof objectArg.mode === 'string') {
     const mode = objectArg.mode.trim().toLowerCase();
@@ -65,6 +83,44 @@ function parseStartMode(args: unknown[]): MediaMode | null {
   return null;
 }
 
+function parseDownloadModeAndUrl(args: unknown[]): { mode: MediaMode | null; url: string } {
+  const tupleArg = Array.isArray(args[0]) ? args[0] : null;
+  if (
+    tupleArg &&
+    tupleArg.length >= 2 &&
+    typeof tupleArg[0] === 'string' &&
+    typeof tupleArg[1] === 'string'
+  ) {
+    const mode = tupleArg[0].trim().toLowerCase();
+    if (mode === 'image' || mode === 'video') {
+      return { mode, url: tupleArg[1].trim() };
+    }
+  }
+
+  const objectArg = asObjectArg(args[0]);
+  if (objectArg) {
+    const modeRaw = typeof objectArg.mode === 'string' ? objectArg.mode.trim().toLowerCase() : '';
+    const mode = modeRaw === 'image' || modeRaw === 'video' ? modeRaw : null;
+    const url = typeof objectArg.url === 'string' ? objectArg.url.trim() : '';
+    return { mode, url };
+  }
+
+  const first = typeof args[0] === 'string' ? args[0].trim() : '';
+  const second = typeof args[1] === 'string' ? args[1].trim() : '';
+
+  const firstLower = first.toLowerCase();
+  if (firstLower === 'image' || firstLower === 'video') {
+    return { mode: firstLower, url: second };
+  }
+
+  const secondLower = second.toLowerCase();
+  if (secondLower === 'image' || secondLower === 'video') {
+    return { mode: secondLower, url: first };
+  }
+
+  return { mode: null, url: '' };
+}
+
 async function fileExists(filePath: string): Promise<boolean> {
   try {
     await fs.access(filePath);
@@ -75,20 +131,10 @@ async function fileExists(filePath: string): Promise<boolean> {
 }
 
 async function resolveDefaultMediaPath(mode: MediaMode, config: AgentConfig): Promise<string | null> {
-  const candidates =
-    mode === 'video'
-      ? [
-          path.join(config.mediaDir, 'current.mp4'),
-          path.join(config.mediaDir, 'current.webm'),
-          path.join(config.mediaDir, 'current.mov'),
-          path.join(config.mediaDir, 'current.mkv'),
-        ]
-      : [
-          path.join(config.mediaDir, 'current.jpeg'),
-          path.join(config.mediaDir, 'current.jpg'),
-          path.join(config.mediaDir, 'current.png'),
-          path.join(config.mediaDir, 'current.webp'),
-        ];
+  const candidates = [
+    path.join(config.mediaDir, SLOT_FILENAME[mode]),
+    ...LEGACY_MODE_FILES[mode].map((name) => path.join(config.mediaDir, name)),
+  ];
 
   for (const candidate of candidates) {
     if (await fileExists(candidate)) {
@@ -97,6 +143,23 @@ async function resolveDefaultMediaPath(mode: MediaMode, config: AgentConfig): Pr
   }
 
   return null;
+}
+
+async function removeIfExists(filePath: string): Promise<void> {
+  try {
+    await fs.unlink(filePath);
+  } catch (error) {
+    const maybeErr = error as NodeJS.ErrnoException;
+    if (maybeErr?.code !== 'ENOENT') {
+      throw error;
+    }
+  }
+}
+
+async function cleanupLegacyModeFiles(mode: MediaMode, config: AgentConfig): Promise<void> {
+  for (const fileName of LEGACY_MODE_FILES[mode]) {
+    await removeIfExists(path.join(config.mediaDir, fileName));
+  }
 }
 
 export async function handleInboundCommand(command: ParsedInboundCommand, config: AgentConfig): Promise<CommandOutcome> {
@@ -132,6 +195,31 @@ export async function handleInboundCommand(command: ParsedInboundCommand, config
           resultCode: 0,
           detail: `${mode} playback started`,
           data: { mediaPath, mode },
+        };
+      }
+
+      case 'download': {
+        const { mode, url } = parseDownloadModeAndUrl(command.args);
+        if (!mode) {
+          return {
+            resultCode: -100,
+            detail: 'download requires media mode (image|video) and url',
+          };
+        }
+        if (!url.trim()) {
+          return {
+            resultCode: -100,
+            detail: `download ${mode} requires a url`,
+          };
+        }
+
+        const slotPath = await downloadMedia(url, config, SLOT_FILENAME[mode]);
+        await cleanupLegacyModeFiles(mode, config);
+        await playMedia(slotPath, config);
+        return {
+          resultCode: 0,
+          detail: `${mode} downloaded and playback started`,
+          data: { mediaPath: slotPath, mode },
         };
       }
 

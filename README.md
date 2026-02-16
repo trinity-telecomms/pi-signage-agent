@@ -71,6 +71,7 @@ Supported RPC names:
 - `ping`
 - `start` (requires media mode: `image` or `video`)
 - `stop`
+- `download` (requires media mode and public URL; downloads, overwrites slot file, and starts playback)
 - `signage_download`
 - `signage_play`
 - `signage_download_and_play`
@@ -101,6 +102,20 @@ Argument examples:
 
 ```json
 {"c":[0,["start","image"]]}
+```
+
+```json
+{"c":[0,["download","video","https://example.com/media/playlist-a.m3u8"]]}
+```
+
+```json
+{"c":[0,["download","image","https://example.com/media/poster.png"]]}
+```
+
+Also accepted (nested tuple arg style):
+
+```json
+{"c":[0,["download",["video","https://google.com/test.mp4"]]]}
 ```
 
 ## systemd deployment
