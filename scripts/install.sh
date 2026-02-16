@@ -7,6 +7,13 @@ BIN_SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/dist/signage-agent"
 ENV_SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/.env"
 SERVICE_SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/config/signage-agent.service"
 SERVICE_DEST="/etc/systemd/system/signage-agent.service"
+TARGET_USER="${SUDO_USER:-pi}"
+TARGET_GROUP="$(id -gn "$TARGET_USER" 2>/dev/null || true)"
+
+if [[ -z "$TARGET_GROUP" ]]; then
+  echo "Could not resolve group for user: $TARGET_USER"
+  exit 1
+fi
 
 if [[ ! -f "$BIN_SRC" ]]; then
   echo "Missing binary at $BIN_SRC"
@@ -29,7 +36,13 @@ else
   echo "Create $APP_DIR/.env manually before starting service."
 fi
 
-install -m 0644 "$SERVICE_SRC" "$SERVICE_DEST"
+chown -R "$TARGET_USER:$TARGET_GROUP" "$APP_DIR"
+
+sed \
+  -e "s/__SERVICE_USER__/$TARGET_USER/g" \
+  -e "s/__SERVICE_GROUP__/$TARGET_GROUP/g" \
+  "$SERVICE_SRC" > "$SERVICE_DEST"
+chmod 0644 "$SERVICE_DEST"
 
 systemctl daemon-reload
 systemctl enable --now "$SERVICE_NAME"
