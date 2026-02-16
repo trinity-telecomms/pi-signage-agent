@@ -1,0 +1,19 @@
+{
+  "name": "raspberry-pi-mqtt-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun run src/index.ts",
+    "start": "bun run src/index.ts",
+    "check": "bunx tsc --noEmit",
+    "build": "bun build --compile --minify src/index.ts --outfile dist/signage-agent"
+  },
+  "dependencies": {
+    "mqtt": "^5.14.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  }
+}
